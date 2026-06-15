@@ -1,12 +1,10 @@
 from pydantic import BaseModel, ConfigDict
 from argparse import Namespace
 from llm_sdk import Small_LLM_Model
-# from .funcs import functions
 import numpy as np
 import json
 import re
 import time
-# from re import fullmatch
 
 
 class FunctionCallingEngine(BaseModel):
@@ -30,18 +28,6 @@ class FunctionCallingEngine(BaseModel):
 
         return encoded_funcs
 
-    # @staticmethod
-    # def _filter_paths(column: int, predictable_paths: list, best_token_id: int):
-    #     valid_paths = list()
-    #     for path in predictable_paths:
-    #         if path[column] == best_token_id:
-    #             valid_paths.append(path)
-    #     if valid_paths:
-    #         predictable_paths.clear()
-    #         predictable_paths.extend(valid_paths)
-    #         return True
-    #     return False
-
     @staticmethod
     def _check_if_found(predictable_paths: list):
         tmp = list()
@@ -56,35 +42,6 @@ class FunctionCallingEngine(BaseModel):
         for p in tmp:
             predictable_paths.remove(p)
         return test
-
-    # def func_names_filter(self, promt_logits: np) -> list:
-    #     encoded_funcs = self._encode_func_names()
-
-    #     predictable_paths = [{"IDs": tuple(tokens.tolist()),"scores": 0, "elem_founded": 0} for tokens in encoded_funcs.values()]
-    #     funcs_ids = tuple()
-    #     top_k = np.argsort(promt_logits)
-    #     while not funcs_ids:
-            
-    #             # best_token_id = int(np.argmax(promt_logits))
-    #         # if not any(t_id == best_token_id for path in predictable_paths for t_id in path):
-    #         for best_token_id in top_k:
-    #             for path in predictable_paths:
-    #                 for t_id in path["IDs"]:
-    #                     if t_id == best_token_id:
-    #                         path["scores"] += promt_logits[best_token_id]
-    #                         path["elem_founded"] += 1
-    #                 # if len(path["IDs"]) > path["elem_founded"]:
-    #                 #     expected = path["IDs"][path["elem_founded"]]
-    #                 #     if expected == best_token_id:
-    #                 #         path["scores"] += promt_logits[best_token_id]
-    #                 #         path["elem_founded"] += 1
-    #         promt_logits[best_token_id] = float("-inf")
-
-    #         # if FunctionCallingEngine._filter_paths(column, predictable_paths, best_token_id):
-    #         #     column += 1
-    #         funcs_ids = FunctionCallingEngine._check_if_found(predictable_paths)
-
-    #     return funcs_ids
 
     def _get_logits(self, text: str):
         tensors = self.model.encode(text).numpy()
@@ -101,10 +58,6 @@ class FunctionCallingEngine(BaseModel):
 
         best_idx = max(scores, key=scores.get)
         return  self.def_funcs[int(best_idx)]
-        # return [(int(idx), score) for idx, score in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
-
-    # def _extract_args(func: dict):
-        
 
     def json_gen(self, json_out: str, prompt: int):
         prompt_text = self.inpt_prompts[prompt].get("prompt")
@@ -150,4 +103,3 @@ class FunctionCallingEngine(BaseModel):
                 prompt += 1
             data = json.loads(json_out)
             json.dump(data, f, indent=2)
-                  
