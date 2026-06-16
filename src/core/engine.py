@@ -5,6 +5,7 @@ import numpy as np
 import json
 import re
 import time
+from .validators import *
 
 
 class FunctionCallingEngine(BaseModel):
@@ -12,8 +13,8 @@ class FunctionCallingEngine(BaseModel):
 
     args: Namespace
     model: Small_LLM_Model = Small_LLM_Model()
-    def_funcs: dict = None
-    inpt_prompts: dict = None
+    def_funcs: FuncsDef
+    inpt_prompts: Prompts
 
     def _encode_func_names(self) -> dict:
         encoded_funcs = dict()
@@ -28,21 +29,6 @@ class FunctionCallingEngine(BaseModel):
 
         return encoded_funcs
 
-    @staticmethod
-    def _check_if_found(predictable_paths: list):
-        tmp = list()
-        test = list()
-        for path in predictable_paths:
-            if len(path["IDs"]) == path["elem_founded"]:
-                if max(predictable_paths, key=lambda path: path["scores"]) == path:
-                    test.append(path["IDs"])
-                    tmp.append(path)
-        if not test:
-            return False
-        for p in tmp:
-            predictable_paths.remove(p)
-        return test
-
     def _get_logits(self, text: str):
         tensors = self.model.encode(text).numpy()
         return np.array(self.model.get_logits_from_input_ids(tensors.ravel().tolist()))
@@ -54,7 +40,6 @@ class FunctionCallingEngine(BaseModel):
         for idx, token_ids in encoded_funcs.items():
             token_ids = np.array(token_ids)
             scores[idx] = np.sum(prompt_logits[token_ids])
-
 
         best_idx = max(scores, key=scores.get)
         return  self.def_funcs[int(best_idx)]
@@ -76,6 +61,7 @@ class FunctionCallingEngine(BaseModel):
             "state6": self.model.encode(f'{commas}').numpy().ravel(),
             "state7": self.model.encode("]").numpy().ravel()
         }
+
         if json_out.startswith("["):
             stats.pop("state1")
         if prompt < len(self.inpt_prompts) - 1:

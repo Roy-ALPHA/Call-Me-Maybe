@@ -1,6 +1,8 @@
 from argparse import ArgumentParser, ArgumentTypeError
 import os, sys
 from .engine import FunctionCallingEngine
+import json
+from .validators import *
 
 class ArgParser:
 
@@ -15,6 +17,13 @@ class ArgParser:
         if not os.path.exists(path):
             raise ArgumentTypeError(f"File not found: {path}")
         return ArgParser.path_extension(path)
+
+    @staticmethod
+    def validate_input_files(args):
+        with open(args.functions_definition) as func_def_f, open(args.input) as input_f:
+            funcs_def = FuncsDef(funcs=json.load(func_def_f))
+            promts = Prompts(prompts=json.load(input_f))
+            return FunctionCallingEngine(args=args, def_funcs=funcs_def, inpt_prompts= promts)
 
     def parse_validate_args(self):
         parser = ArgumentParser(
@@ -40,4 +49,4 @@ class ArgParser:
             default="data/output/function_calls.json",
             help="output file path"
         )
-        return FunctionCallingEngine(args=parser.parse_args())
+        return ArgParser.validate_input_files(parser.parse_args())
