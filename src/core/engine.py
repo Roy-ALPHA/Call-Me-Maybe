@@ -77,7 +77,6 @@ class FunctionCallingEngine(BaseModel):
                     raise Exception
         return json_out
 
-
     def ano(self):
         with open(self.args.input) as f:
             self.inpt_prompts = json.load(f)
