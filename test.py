@@ -42,51 +42,70 @@ prompt = "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with a
 logits = np.array(model.get_logits_from_input_ids(model.encode(prompt).numpy().ravel().tolist()))
 
 functions = [
-    "fn_add_numbers Add two numbers together and return their sum.",
-    "fn_greet Generate a greeting message for a person by name.",
-    "fn_reverse_string Reverse a string and return the reversed result.",
-    "fn_get_square_root Calculate the square root of a number.",
-    "fn_substitute_string_with_regex Replace all occurrences matching a regex pattern in a string."
+    "fn_add_numbers",
+    "fn_greet",
+    "fn_reverse_string",
+    "fn_get_square_root",
+    "fn_substitute_string_with_regex"
 ]
-# for func in functions:
-#     trie.insert(model.encode(func).numpy().ravel().tolist())
-# top_scores = []
 
-# for func in functions:
-#     tokens = model.encode(func).numpy().ravel()
-#     score = np.sum(logits[tokens])
-#     top_scores.append(score / len(tokens))
+test = {
+    "prompt": prompt,
+    "name": "", 
+}
+
+with open("data/input/functions_definition.json") as f, open("prompt") as p:
+    funcs = json.load(f)
+    prompt = p.read() + funcs.__repr__() + "\n-prompt:"
 
 
-top_scores = [np.sum(logits[model.encode(func).numpy().ravel()]) for func in functions]
+top_scores = [np.sum(logits[model.encode(func["name"]).numpy().ravel()]) for func in funcs]
 
 top_scores = np.array(top_scores)
 
-text = "functions: "
+
 
 for _ in range(3):
     top_score = np.argmax(top_scores)
     trie.insert(model.encode(functions[top_score]).numpy().ravel().tolist())
     top_scores[top_score] = float("-inf")
     print(functions[top_score])
-    text += functions[top_score]
 
 func_name = []
 cur_node = trie.root
+tmp = prompt
 
 while not cur_node.is_end and cur_node.children:
+    prompt += test.__repr__()
 
     logits = model.get_logits_from_input_ids(model.encode(prompt).numpy().ravel().tolist())
 
     allowed_tokens = trie.get_allowed_next_tokens(cur_node)
 
     valid_token_scores = mask_invalid_tokens(logits, allowed_tokens)
-    # print([(model.decode(int(token)), logits[int(token)]) for token in valid_token_scores.keys()])
+
     best_token = max(valid_token_scores, key=valid_token_scores.get)
 
     func_name.append(int(best_token))
 
+    test["name"] += model.decode(int(best_token))
+
     cur_node = trie.get_node(best_token, cur_node)
 
 
-print([model.decode(func) for func in func_name])
+# for func in funcs:
+#     if func["name"] == test["name"]:
+#         test["paramters"] = func["parameters"]
+logits = model.get_logits_from_input_ids(model.encode(tmp + "'name': 'fn_substitute_string_with_regex', 'parameters': {'regex': '").numpy().ravel().tolist())
+logits = np.array(logits)
+while True:
+
+    best = np.argmax(logits)
+
+    print(model.decode(best))
+
+    logits[best] = float("-inf")
+
+    sleep(0.3)
+
+# print([model.decode(func) for func in func_name])
