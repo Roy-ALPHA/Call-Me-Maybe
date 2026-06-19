@@ -21,9 +21,11 @@ class ArgParser:
     @staticmethod
     def validate_input_files(args):
         with open(args.functions_definition) as func_def_f, open(args.input) as input_f:
-            funcs_def = FuncsDef(funcs=json.load(func_def_f))
-            promts = Prompts(prompts=json.load(input_f))
-            return FunctionCallingEngine(args=args, def_funcs=funcs_def, inpt_prompts= promts)
+            def_funcs = json.load(func_def_f)
+            prompts = json.load(input_f)
+            FuncsDef(funcs=def_funcs)
+            Prompts(prompts=prompts)
+            return FunctionCallingEngine(args=args, def_funcs=def_funcs, inpt_prompts=prompts)
 
     def parse_validate_args(self):
         parser = ArgumentParser(

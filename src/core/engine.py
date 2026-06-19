@@ -6,6 +6,7 @@ import json
 import re
 import time
 from .validators import *
+from .Trie import TrieNode, Trie
 
 
 class FunctionCallingEngine(BaseModel):
@@ -13,78 +14,48 @@ class FunctionCallingEngine(BaseModel):
 
     args: Namespace
     model: Small_LLM_Model = Small_LLM_Model()
-    def_funcs: FuncsDef
-    inpt_prompts: Prompts
+    def_funcs: list[dict]
+    inpt_prompts: list[dict]
 
-    def _encode_func_names(self) -> dict:
-        encoded_funcs = dict()
-        with open(self.args.functions_definition) as f:
-            self.def_funcs = json.load(f)
-        
-        index = 0
+    @staticmethod
+    def mask_low_scores(allowed_tokens, logits):
+        return {token: logits[token] for token in allowed_tokens}
+
+    def extract_func(self, cur_promt):
+        print(cur_promt)
+        prompt = "prompt: " + f"{cur_promt}" + "\nfrom this prompt, select the best matching dict from this list of dicts:\n" + self.def_funcs.__repr__()
+
+        trie = Trie()
         for func in self.def_funcs:
-            tokens_IDs = self.model.encode(f"{func['description']} {func['name']}").numpy().ravel()
-            encoded_funcs.update({str(index): tokens_IDs})
-            index += 1
+            trie.insert(self.model.encode(" " + func.__repr__() + "}").numpy().ravel().tolist())
 
-        return encoded_funcs
+        generated_tokens = []
+        correct_func = ""
 
-    def _get_logits(self, text: str):
-        tensors = self.model.encode(text).numpy()
-        return np.array(self.model.get_logits_from_input_ids(tensors.ravel().tolist()))
+        cur_node = trie.root
+        while not cur_node.is_end:
+            prompt_tokens = self.model.encode(prompt).numpy().ravel().tolist()
 
-    def func_names_filter(self, prompt_logits: np) -> list[int]:
-        encoded_funcs = self._encode_func_names()
+            logits = self.model.get_logits_from_input_ids(prompt_tokens + generated_tokens)
 
-        scores = {}
-        for idx, token_ids in encoded_funcs.items():
-            token_ids = np.array(token_ids)
-            scores[idx] = np.sum(prompt_logits[token_ids])
+            top_k = np.argmax(np.array(logits))
 
-        best_idx = max(scores, key=scores.get)
-        return  self.def_funcs[int(best_idx)]
+            allowed_tokens = trie.get_allowed_next_tokens(cur_node)
 
-    def json_gen(self, json_out: str, prompt: int):
-        prompt_text = self.inpt_prompts[prompt].get("prompt")
-        func_name = self.func_names_filter(self._get_logits(prompt_text))["name"]
-        parameters = "test"
-        prompt_json = json.dumps(prompt_text)
-        name_json = json.dumps(func_name)
-        parameters_json = json.dumps(parameters)
-        commas = "}" if prompt == len(self.inpt_prompts) - 1 else "},"
-        stats = {
-            "state1": self.model.encode("[").numpy().ravel(),
-            "state2": self.model.encode("{").numpy().ravel(),
-            "state3": self.model.encode(f'"prompt": {prompt_json},').numpy().ravel(),
-            "state4": self.model.encode(f'"name": {name_json},').numpy().ravel(),
-            "state5": self.model.encode(f'"parameters": {parameters_json}').numpy().ravel(),
-            "state6": self.model.encode(f'{commas}').numpy().ravel(),
-            "state7": self.model.encode("]").numpy().ravel()
-        }
+            generated_tokens.append(top_k)
 
-        if json_out.startswith("["):
-            stats.pop("state1")
-        if prompt < len(self.inpt_prompts) - 1:
-            stats.pop("state7")
+            if top_k in allowed_tokens:
+                valid_tokens = FunctionCallingEngine.mask_low_scores(allowed_tokens, logits)
 
-        for t_ids in stats.values():
-            logits = self._get_logits(self.inpt_prompts[prompt].get("prompt"))
-            for t_id in t_ids:
-                try:
-                    logits[t_id]
-                    json_out += self.model.decode(t_id)
-                except:
-                    raise Exception
-        return json_out
+                best_token = max(valid_tokens, key=valid_tokens.get)
 
-    def ano(self):
-        with open(self.args.input) as f:
-            self.inpt_prompts = json.load(f)
-        with open(self.args.output, "w+") as f:
-            json_out = ''
-            prompt = 0
-            while not json_out.endswith("]"):
-                json_out = self.json_gen(json_out, prompt)
-                prompt += 1
-            data = json.loads(json_out)
-            json.dump(data, f, indent=2)
+                correct_func += self.model.decode(best_token)
+                print(correct_func)
+                cur_node = trie.get_node(best_token, cur_node)
+
+        print(json.loads(json.dumps(correct_func)))
+    
+    def test(self):
+        for prompt in self.inpt_prompts:
+            self.extract_func(prompt["prompt"])
+

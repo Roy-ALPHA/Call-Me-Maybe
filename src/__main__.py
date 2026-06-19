@@ -2,7 +2,7 @@ from .core import *
 
 def run():
     fn_caller = ArgParser().parse_validate_args()
-    fn_caller.ano()
+    fn_caller.test()
 
 if __name__ == "__main__":
     try:
