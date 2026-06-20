@@ -7,6 +7,7 @@ import re
 import time
 from .validators import *
 from .Trie import TrieNode, Trie
+from multiprocessing import Pool, cpu_count
 
 
 class FunctionCallingEngine(BaseModel):
@@ -16,13 +17,14 @@ class FunctionCallingEngine(BaseModel):
     model: Small_LLM_Model = Small_LLM_Model()
     def_funcs: list[dict]
     inpt_prompts: list[dict]
+    funcs_test: list = []
 
     @staticmethod
     def mask_low_scores(allowed_tokens, logits):
         return {token: logits[token] for token in allowed_tokens}
 
     def extract_func(self, cur_promt):
-        print(cur_promt)
+        # print(cur_promt)
         # exmple = json.dumps(self.def_funcs[0].__repr__())
         # print(exmple)
         # prompt = "prompt: " + f"{cur_promt}" + "\nfrom this prompt, select the best matching dict from this list of dicts:\n" + self.def_funcs.__repr__() + "\nyour output must be like this:\n" + exmple
@@ -60,9 +62,10 @@ class FunctionCallingEngine(BaseModel):
                 # print(correct_func)
                 cur_node = trie.get_node(best_token, cur_node)
 
-        print(json.loads(json.dumps(correct_func)))
+        return json.loads(json.dumps(correct_func))
     
     def test(self):
-        for prompt in self.inpt_prompts:
-            self.extract_func(prompt["prompt"])
-
+        with Pool(processes=cpu_count()) as pool:
+            res = pool.map(self.extract_func, [prompt["prompt"] for prompt in self.inpt_prompts])
+        
+        print(res)
