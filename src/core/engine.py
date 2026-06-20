@@ -23,12 +23,19 @@ class FunctionCallingEngine(BaseModel):
 
     def extract_func(self, cur_promt):
         print(cur_promt)
-        prompt = "prompt: " + f"{cur_promt}" + "\nfrom this prompt, select the best matching dict from this list of dicts:\n" + self.def_funcs.__repr__()
-
+        # exmple = json.dumps(self.def_funcs[0].__repr__())
+        # print(exmple)
+        # prompt = "prompt: " + f"{cur_promt}" + "\nfrom this prompt, select the best matching dict from this list of dicts:\n" + self.def_funcs.__repr__() + "\nyour output must be like this:\n" + exmple
+        with open("src/core/prompt.txt") as f:
+            prompt = f.read() + "\nUser Request:\n" + cur_promt + "\nAvailable Functions:\n" + json.dumps(self.def_funcs) + "\nReturn the best matching function dictionary (only json output)."
+        # print(prompt)
         trie = Trie()
-        for func in self.def_funcs:
-            trie.insert(self.model.encode(" " + func.__repr__() + "}").numpy().ravel().tolist())
 
+        for func in self.def_funcs:
+            # print(func.__repr__())
+            trie.insert(self.model.encode(" " + json.dumps(func)).numpy().ravel().tolist()[:-1] + [95642])
+        # print(self.model.encode(" " + json.dumps(self.def_funcs[-1])).numpy().ravel().tolist()[-1], self.model.encode("\n}}"))
+        # [74491]
         generated_tokens = []
         correct_func = ""
 
@@ -43,14 +50,14 @@ class FunctionCallingEngine(BaseModel):
             allowed_tokens = trie.get_allowed_next_tokens(cur_node)
 
             generated_tokens.append(top_k)
-
+            # print(self.model.decode(top_k), top_k)
             if top_k in allowed_tokens:
                 valid_tokens = FunctionCallingEngine.mask_low_scores(allowed_tokens, logits)
 
                 best_token = max(valid_tokens, key=valid_tokens.get)
 
                 correct_func += self.model.decode(best_token)
-                print(correct_func)
+                # print(correct_func)
                 cur_node = trie.get_node(best_token, cur_node)
 
         print(json.loads(json.dumps(correct_func)))
