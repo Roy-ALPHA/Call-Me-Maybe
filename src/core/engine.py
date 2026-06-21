@@ -50,8 +50,8 @@ class FunctionCallingEngine(BaseModel):
             "\nUser Request:\n" + cur_prompt +
             "\nAvailable Functions:\n" +
             json.dumps(self.def_funcs) +
-            "\nDetermine the best matching function name.\n"
-            "The answer is: "
+            "\nDetermine the best matching function name.\n" +
+            "The output is: "
         )
 
         return prompt
@@ -85,17 +85,14 @@ class FunctionCallingEngine(BaseModel):
 
             allowed_tokens = trie.get_allowed_next_tokens(cur_node)
 
-            masked_logits = np.full_like(logits, -np.inf)
-
-            masked_logits[allowed_tokens] = logits[allowed_tokens]
-
-            best_token = np.argmax(masked_logits)
+            best_token = max(allowed_tokens, key=lambda token: logits[token])
 
             func.append(best_token)
 
             cur_node = trie.get_node(best_token, cur_node)
 
         func_selected = self.model.decode(func)
+
         for func in self.def_funcs:
             if func["name"] == func_selected[1:]:
                 func["prompt"] = cur_prompt
@@ -109,37 +106,22 @@ class FunctionCallingEngine(BaseModel):
 
         cur_ouput = []
 
-        # open_bracket_tokens =  self.model.encode("(").numpy().ravel().tolist() + self.model.encode(" (").numpy().ravel().tolist()
-        # close_bracket_tokens = self.model.encode(")").numpy().ravel().tolist() + self.model.encode(")\n\n").numpy().ravel().tolist() + self.model.encode(")\n").numpy().ravel().tolist()
-
         for param in func_selected["parameters"]:
 
-            value = []
+            arg = ""
             can_take = False
 
-            while True:
+            while arg.count("(") != arg.count(")") or arg.count("(") == 0:
 
                 logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + cur_ouput))
 
                 best_token = np.argmax(logits)
 
                 cur_ouput.append(best_token)
+                print(self.model.decode(best_token))
+                arg += self.model.decode(best_token)
 
-                if ")" in self.model.decode(best_token):
-                    break
-
-                if can_take:
-                    # print(best_token, self.model.decode(best_token))
-                    value.append(int(best_token))
-
-                if "(" in self.model.decode(best_token):
-                    can_take = True
-
-
-                # print(best_token, self.model.decode(best_token))
-
-                # logits[best_token] = float("-inf")
-            print("".join([self.model.decode(token) for token in value]))
+            print(arg)
 
 
     
