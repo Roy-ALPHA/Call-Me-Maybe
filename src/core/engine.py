@@ -102,24 +102,38 @@ class FunctionCallingEngine(BaseModel):
         prompt = self._build_args_prompt(func_selected)
 
         prompt_tokens = self.model.encode(prompt).numpy().ravel().tolist()
-
         cur_ouput = []
 
-        # for param in func_selected["parameters"]:
+        for param in func_selected["parameters"]:
 
-        arg = ""
+            arg_type = func_selected["parameters"][param]["type"]
+            arg = ""
 
-        while arg.count("{") != arg.count("}") or arg.count("{") == 0:
+            while True:
 
-            logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + cur_ouput))
+                logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + cur_ouput))
 
-            best_token = np.argmax(logits)
+                best_token = np.argmax(logits)
 
-            cur_ouput.append(best_token)
-            # print(self.model.decode(best_token))
-            arg += self.model.decode(best_token)
+                cur_ouput.append(best_token)
 
-        print(func_selected["prompt"], arg, sep="\n")
+                token_text = self.model.decode(best_token)
+
+                if arg_type == "number":
+                    if any(char.isdigit() for char in token_text):
+                        arg += token_text
+                    elif arg:
+                        break
+
+                if arg_type == "string":
+                    cur_text = self.model.decode(cur_ouput)
+                    if param in cur_text:
+                        arg += token_text
+                    if arg and arg.count("{") == arg.count("}"):
+                        break
+                # arg += self.model.decode(best_token)
+
+            print(param + ":" , arg)
 
 
     
