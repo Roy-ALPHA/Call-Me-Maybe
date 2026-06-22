@@ -63,8 +63,11 @@ class FunctionCallingEngine(BaseModel):
             "\nSelected Function:\n" +
             selected_function["name"] + 
             "\nFunction Parameters (in order):\n" +
-            json.dumps(selected_function["parameters"]) + "\n" +
-            self.args_prompt
+            json.dumps(selected_function["parameters"]) +
+            "\nFunction description:\n" +
+            selected_function["description"] + "\n" +
+            self.args_prompt +
+            "\nThe output is: "
         )
 
         return prompt
@@ -108,6 +111,8 @@ class FunctionCallingEngine(BaseModel):
 
             arg_type = func_selected["parameters"][param]["type"]
             arg = ""
+            local_text = ""
+            cur_ouput += self.model.encode(f'"{param}": ').numpy().ravel().tolist()
 
             while True:
 
@@ -125,15 +130,22 @@ class FunctionCallingEngine(BaseModel):
                     elif arg:
                         break
 
-                if arg_type == "string":
-                    cur_text = self.model.decode(cur_ouput)
-                    if param in cur_text:
-                        arg += token_text
-                    if arg and arg.count("{") == arg.count("}"):
-                        break
+                # if arg_type == "string":
+                #     # cur_text = self.model.decode(cur_ouput)
+                #     if f'"{param}": ' in local_text:
+                #         arg += token_text
+                #     if "," in arg or "}" in arg:
+                #         break
+
+                if local_text.count('"') == 2:
+                    break
+                else:
+                    local_text += self.model.decode(best_token)
+                
+                # print(self.model.decode(best_token))
                 # arg += self.model.decode(best_token)
 
-            print(param + ":" , arg)
+            print(param + ":" , local_text)
 
 
     
