@@ -59,13 +59,12 @@ class FunctionCallingEngine(BaseModel):
     def _build_args_prompt(self, selected_function):
 
         prompt = (
-            self.args_prompt +
             "\nUser Request:\n" + selected_function["prompt"] +
             "\nSelected Function:\n" +
             selected_function["name"] + 
             "\nFunction Parameters (in order):\n" +
-            json.dumps(selected_function["parameters"]) +
-            "\n"
+            json.dumps(selected_function["parameters"]) + "\n" +
+            self.args_prompt
         )
 
         return prompt
@@ -106,22 +105,21 @@ class FunctionCallingEngine(BaseModel):
 
         cur_ouput = []
 
-        for param in func_selected["parameters"]:
+        # for param in func_selected["parameters"]:
 
-            arg = ""
-            can_take = False
+        arg = ""
 
-            while arg.count("(") != arg.count(")") or arg.count("(") == 0:
+        while arg.count("{") != arg.count("}") or arg.count("{") == 0:
 
-                logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + cur_ouput))
+            logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + cur_ouput))
 
-                best_token = np.argmax(logits)
+            best_token = np.argmax(logits)
 
-                cur_ouput.append(best_token)
-                print(self.model.decode(best_token))
-                arg += self.model.decode(best_token)
+            cur_ouput.append(best_token)
+            # print(self.model.decode(best_token))
+            arg += self.model.decode(best_token)
 
-            print(arg)
+        print(func_selected["prompt"], arg, sep="\n")
 
 
     
