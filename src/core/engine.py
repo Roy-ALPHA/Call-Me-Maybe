@@ -100,55 +100,66 @@ class FunctionCallingEngine(BaseModel):
                 func["prompt"] = cur_prompt
                 return self.extract_args(func)
     
-    def extract_args(self, func_selected):
 
-        prompt = self._build_args_prompt(func_selected)
 
-        prompt_tokens = self.model.encode(prompt).numpy().ravel().tolist()
-        cur_ouput = []
+    def _extract_int_arg(self, tokens):
 
-    # for param in func_selected["parameters"]:
+        num = ""
+        generated = []
 
-        # arg_type = func_selected["parameters"][param]["type"]
-        local_text = ""
-        # cur_ouput += self.model.encode(f'"{param}": ').numpy().ravel().tolist()
+        while True:
 
-        while not local_text.count("{") == local_text.count("}") or not local_text:
-
-            logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + cur_ouput))
+            logits = np.array(self.model.get_logits_from_input_ids(tokens + generated))
 
             best_token = np.argmax(logits)
 
-            cur_ouput.append(best_token)
+            generated.append(best_token)
 
-            # token_text = self.model.decode(best_token)
+            text = self.model.decode(best_token)
 
-            # if arg_type == "number":
-            #     if any(char.isdigit() for char in token_text):
-            #         arg += token_text
-            #     elif arg:
-            #         break
+            number = re.search(r"\d+", text)
 
-            # # if arg_type == "string":
-            # #     # cur_text = self.model.decode(cur_ouput)
-            # #     if f'"{param}": ' in local_text:
-            # #         arg += token_text
-            # #     if "," in arg or "}" in arg:
-            # #         break
+            if number:
+                num += number.group()
+            elif num:
+                break
 
-            # if local_text.count('"') == 2:
-            #     break
-            # else:
-            local_text += self.model.decode(best_token)
-            # print(local_text)
-
-        match = re.search(r"{.*}", local_text)
+        return int(num)
 
 
-        args = json.loads(match.group(0))
-            # arg += self.model.decode(best_token)
+    def _extract_str_arg(self, tokens, cur_arg):
+        
+        text = ""
+        generated = []
 
-        print(func_selected["prompt"], args)
+        while True:
+
+            logits = np.array(self.model.get_logits_from_input_ids(tokens + generated))
+
+            best_token = np.argmax(logits)
+
+            text += self.model.decode(best_token)
+
+            
+
+
+
+
+    def _extract_bool_arg(self, tokens):
+        pass
+
+    def extract_args(self, func_selected):
+        
+        prompt_tokens = self.model.encode(func_selected["prompt"]).numpy().ravel().tolist()
+        args = dict()
+
+        for arg in func_selected["parameters"]:
+            if func_selected["parameters"][arg]["type"] == "number":
+                args.update({arg: self._extract_int_arg(prompt_tokens)})
+            elif func_selected["parameters"][arg]["type"] == "string":
+                args.update({arg: self._extract_str_arg(prompt_tokens, arg)})
+            elif func_selected["parameters"][arg]["type"] == "boolean":
+                args.update({arg: self._extract_bool_arg(prompt_tokens)})
 
 
     
