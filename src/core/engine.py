@@ -67,7 +67,7 @@ class FunctionCallingEngine(BaseModel):
             "\nFunction description:\n" +
             selected_function["description"] + "\n" +
             self.args_prompt +
-            "\nThe output is: "
+            "\n"
         )
 
         return prompt
@@ -107,45 +107,48 @@ class FunctionCallingEngine(BaseModel):
         prompt_tokens = self.model.encode(prompt).numpy().ravel().tolist()
         cur_ouput = []
 
-        for param in func_selected["parameters"]:
+    # for param in func_selected["parameters"]:
 
-            arg_type = func_selected["parameters"][param]["type"]
-            arg = ""
-            local_text = ""
-            cur_ouput += self.model.encode(f'"{param}": ').numpy().ravel().tolist()
+        # arg_type = func_selected["parameters"][param]["type"]
+        local_text = ""
+        # cur_ouput += self.model.encode(f'"{param}": ').numpy().ravel().tolist()
 
-            while True:
+        while not local_text.count("{") == local_text.count("}") or not local_text:
 
-                logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + cur_ouput))
+            logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + cur_ouput))
 
-                best_token = np.argmax(logits)
+            best_token = np.argmax(logits)
 
-                cur_ouput.append(best_token)
+            cur_ouput.append(best_token)
 
-                token_text = self.model.decode(best_token)
+            # token_text = self.model.decode(best_token)
 
-                if arg_type == "number":
-                    if any(char.isdigit() for char in token_text):
-                        arg += token_text
-                    elif arg:
-                        break
+            # if arg_type == "number":
+            #     if any(char.isdigit() for char in token_text):
+            #         arg += token_text
+            #     elif arg:
+            #         break
 
-                # if arg_type == "string":
-                #     # cur_text = self.model.decode(cur_ouput)
-                #     if f'"{param}": ' in local_text:
-                #         arg += token_text
-                #     if "," in arg or "}" in arg:
-                #         break
+            # # if arg_type == "string":
+            # #     # cur_text = self.model.decode(cur_ouput)
+            # #     if f'"{param}": ' in local_text:
+            # #         arg += token_text
+            # #     if "," in arg or "}" in arg:
+            # #         break
 
-                if local_text.count('"') == 2:
-                    break
-                else:
-                    local_text += self.model.decode(best_token)
-                
-                # print(self.model.decode(best_token))
-                # arg += self.model.decode(best_token)
+            # if local_text.count('"') == 2:
+            #     break
+            # else:
+            local_text += self.model.decode(best_token)
+            # print(local_text)
 
-            print(param + ":" , local_text)
+        match = re.search(r"{.*}", local_text)
+
+
+        args = json.loads(match.group(0))
+            # arg += self.model.decode(best_token)
+
+        print(func_selected["prompt"], args)
 
 
     
@@ -153,4 +156,4 @@ class FunctionCallingEngine(BaseModel):
         start = time.perf_counter()
         for prompt in self.inpt_prompts:
             self.extract_func(prompt["prompt"])
-        print(time.perf_counter() - start)
+        print((time.perf_counter() - start) / 60)
