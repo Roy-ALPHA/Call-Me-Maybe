@@ -66,7 +66,7 @@ class FunctionCallingEngine(BaseModel):
             json.dumps(selected_function["parameters"]) +
             "\nFunction description:\n" +
             selected_function["description"] + "\n" +
-            self.args_prompt +
+            "I will give you the Parameter name and you give me hes value."
             "\n"
         )
 
@@ -174,7 +174,7 @@ class FunctionCallingEngine(BaseModel):
 
     def extract_test(self, func_selected):
 
-        stop_tokens = np.array(self.model.encode(",") + self.model.encode("}")).ravel().tolist()
+        stop_tokens = self.model.encode(",").numpy().ravel().tolist() + self.model.encode("}").numpy().ravel().tolist()
 
         allowed_numbers = set()
         for i in range(10):
@@ -190,14 +190,18 @@ class FunctionCallingEngine(BaseModel):
         trie.insert(self.model.encode("false").numpy().ravel().tolist())
 
         generated = []
-        prompt_tokens = self.model.encode(self._build_args_prompt(func_selected)).numpy().ravel().tolist()
+        # prompt_tokens = self.model.encode(self._build_args_prompt(func_selected)).numpy().ravel().tolist()
 
         for arg in func_selected["parameters"]:
 
             arg_type = func_selected["parameters"][arg]["type"]
             number_text = ""
+            prompt_text = self._build_args_prompt(func_selected) + f"\n{arg}="
+            prompt_tokens = self.model.encode(prompt_text).numpy().ravel().tolist()
 
             while True:
+                prompt_text = self._build_args_prompt(func_selected) + f"\n{arg}={number_text}"
+                prompt_tokens = self.model.encode(prompt_text).numpy().ravel().tolist()
 
                 logits = np.array(
                     self.model.get_logits_from_input_ids(
@@ -209,15 +213,17 @@ class FunctionCallingEngine(BaseModel):
                     allowed_numbers,
                     key=lambda t: logits[t]
                 )
-
+                # print([(self.model.decode(t), logits[t]) for t in allowed_numbers])
                 generated.append(best_token)
 
                 token_text = self.model.decode(best_token)
                 number_text += token_text
 
+
                 # stop condition
                 if best_token in stop_tokens:
-                    return int(number_text.strip())
+                    print(number_text)
+                    break
 
 
 
