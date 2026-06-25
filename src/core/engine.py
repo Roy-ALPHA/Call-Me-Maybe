@@ -109,9 +109,10 @@ class FunctionCallingEngine(BaseModel):
             allowed_numbers.update(
                 self.model.encode(str(i)).numpy().ravel().tolist()
             )
-        allowed_numbers.update(self.model.encode("-").numpy().ravel().tolist())
+        allowed_numbers.update(self.model.encode(" -").numpy().ravel().tolist())
         allowed_numbers.update(self.model.encode(",").numpy().ravel().tolist())
         allowed_numbers.update(self.model.encode(".").numpy().ravel().tolist())
+        allowed_numbers.update(self.model.encode("\n").numpy().ravel().tolist())
 
         trie = Trie()
         trie.insert(self.model.encode("true").numpy().ravel().tolist())
@@ -126,7 +127,6 @@ class FunctionCallingEngine(BaseModel):
             "name": func_selected["name"],
             "parameters": dict()
         }
-
 
         for arg in func_selected["parameters"]:
 
@@ -161,7 +161,7 @@ class FunctionCallingEngine(BaseModel):
                     generated.append(best_token)
 
                     tmp_text = self.model.decode(best_token)
-                    if "," in tmp_text:
+                    if "," in tmp_text or "\n" in tmp_text:
                         final_res["parameters"].update({arg: float(self.model.decode(generated).rstrip(","))})
                         break 
 
@@ -189,7 +189,7 @@ class FunctionCallingEngine(BaseModel):
                     generated.append(best_token)
 
                     if "\n" in self.model.decode(best_token):
-                        final_res["parameters"].update({arg: self.model.decode(generated).strip()})
+                        final_res["parameters"].update({arg: self.model.decode(generated).strip().strip('"')})
                         break
 
             value = self.model.decode(generated)
