@@ -28,21 +28,26 @@ class FunctionCallingEngine(BaseModel):
 
     @cached_property
     def _build_trie(self):
-        trie = Trie()
+        try:
+            trie = Trie()
 
-        for func in self.def_funcs:
-            trie.insert(
-                self.model.encode(" " + func["name"])
-                .numpy()
-                .ravel()
-                .tolist()
-            )
+            for func in self.def_funcs:
+                trie.insert(
+                    self.model.encode(" " + func["name"])
+                    .numpy()
+                    .ravel()
+                    .tolist()
+                )
 
-        with open("prompts/func_prompt.txt") as f1, open("prompts/args_prompt.txt") as f2:
-            self.func_prompt = f1.read()
-            self.args_prompt = f2.read()
+            with open("prompts/func_prompt.txt") as f1, open("prompts/args_prompt.txt") as f2:
+                self.func_prompt = f1.read()
+                self.args_prompt = f2.read()
 
-        return trie
+            return trie
+        except FileNotFoundError as e:
+            raise RuntimeError(f"Prompt file not found: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to build Trie: {e}")
 
     def _build_func_prompt(self, cur_prompt):
 
@@ -74,32 +79,34 @@ class FunctionCallingEngine(BaseModel):
         return prompt
 
     def extract_func(self, cur_prompt):
-        
-        trie, prompt = (self._build_trie, self._build_func_prompt(cur_prompt))
+        try:
+            trie, prompt = (self._build_trie, self._build_func_prompt(cur_prompt))
 
-        func = []
+            func = []
 
-        cur_node = trie.root
-        prompt_tokens = self.model.encode(prompt).numpy().ravel().tolist()
+            cur_node = trie.root
+            prompt_tokens = self.model.encode(prompt).numpy().ravel().tolist()
 
-        while not cur_node.is_end:
+            while not cur_node.is_end:
 
-            logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + func))
+                logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + func))
 
-            allowed_tokens = trie.get_allowed_next_tokens(cur_node)
+                allowed_tokens = trie.get_allowed_next_tokens(cur_node)
 
-            best_token = max(allowed_tokens, key=lambda token: logits[token])
+                best_token = max(allowed_tokens, key=lambda token: logits[token])
 
-            func.append(best_token)
+                func.append(best_token)
 
-            cur_node = trie.get_node(best_token, cur_node)
+                cur_node = trie.get_node(best_token, cur_node)
 
-        func_selected = self.model.decode(func)
+            func_selected = self.model.decode(func)
 
-        for func in self.def_funcs:
-            if func["name"] == func_selected[1:]:
-                func["prompt"] = cur_prompt
-                return self.extract_args(func)
+            for func in self.def_funcs:
+                if func["name"] == func_selected[1:]:
+                    func["prompt"] = cur_prompt
+                    return self.extract_args(func)
+        except Exception as e:
+            raise RuntimeError(f"Error extracting function: {e}")
 
 
     def extract_args(self, func_selected):
@@ -199,15 +206,24 @@ class FunctionCallingEngine(BaseModel):
         return final_res
 
     def call_me_maybe(self):
-        output = []
-        start = time.perf_counter()
-        for prompt in self.inpt_prompts:
-            output.append(self.extract_func(prompt["prompt"]))
+        try:
+            output = []
+            start = time.perf_counter()
+            for prompt in self.inpt_prompts:
+                try:
+                    output.append(self.extract_func(prompt["prompt"]))
+                except Exception as e:
+                    print(f"Warning: Failed to process prompt: {e}")
+                    continue
 
-        output_path = Path(self.args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path = Path(self.args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with output_path.open("w") as f:
-            json.dump(output, f, indent=4)
-        
-        print("Time of execution:", round(((time.perf_counter() - start) / 60), 2), "min")
+            with output_path.open("w") as f:
+                json.dump(output, f, indent=4)
+            
+            print("Time of execution:", round(((time.perf_counter() - start) / 60), 2), "min")
+        except IOError as e:
+            raise RuntimeError(f"Failed to write output: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Error during processing: {e}")

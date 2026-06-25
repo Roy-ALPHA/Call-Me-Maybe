@@ -3,6 +3,7 @@ import os, sys
 from .engine import FunctionCallingEngine
 import json
 from .validators import *
+from pydantic import ValidationError
 
 class ArgParser:
 
@@ -21,11 +22,27 @@ class ArgParser:
     @staticmethod
     def validate_input_files(args):
         with open(args.functions_definition) as func_def_f, open(args.input) as input_f:
-            def_funcs = json.load(func_def_f)
-            prompts = json.load(input_f)
-            FuncsDef(funcs=def_funcs)
-            Prompts(prompts=prompts)
-            return FunctionCallingEngine(args=args, def_funcs=def_funcs, inpt_prompts=prompts)
+            try:
+                def_funcs = json.load(func_def_f)
+                prompts = json.load(input_f)
+                FuncsDef(funcs=def_funcs)
+                Prompts(prompts=prompts)
+                return FunctionCallingEngine(args=args, def_funcs=def_funcs, inpt_prompts=prompts)
+            except json.JSONDecodeError as e:
+                raise ArgumentTypeError(
+                    f"Invalid JSON: line {e.lineno}, column {e.colno}: {e.msg}"
+                )
+
+            except ValidationError as e:
+                msg = str(e).split("For further information visit")[0]
+                raise ArgumentTypeError(
+                    f"Input validation failed:\n{msg}"
+                )
+
+            except OSError as e:
+                raise ArgumentTypeError(
+                    f"Unable to read input file: {e}"
+                )
 
     def parse_validate_args(self):
         parser = ArgumentParser(
