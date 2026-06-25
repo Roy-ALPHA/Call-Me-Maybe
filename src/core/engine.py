@@ -66,7 +66,7 @@ class FunctionCallingEngine(BaseModel):
             json.dumps(selected_function["parameters"]) +
             "\nFunction description:\n" +
             selected_function["description"] + "\n" +
-            "I will give you the Parameter name and you give me hes value."
+            "I will give you the Parameter name and you give me hes value (add ',' in the end of value)."
             "\n"
         )
 
@@ -189,23 +189,28 @@ class FunctionCallingEngine(BaseModel):
         trie.insert(self.model.encode("true").numpy().ravel().tolist())
         trie.insert(self.model.encode("false").numpy().ravel().tolist())
 
-        generated = []
+        # generated = []
         # prompt_tokens = self.model.encode(self._build_args_prompt(func_selected)).numpy().ravel().tolist()
+
+        prompt_text = (
+            self._build_args_prompt(func_selected)
+        )
+
+        prompt_tokens = self.model.encode(
+            prompt_text
+        ).numpy().ravel().tolist()
+
 
         for arg in func_selected["parameters"]:
 
-            arg_type = func_selected["parameters"][arg]["type"]
-            number_text = ""
-            prompt_text = self._build_args_prompt(func_selected) + f"\n{arg}="
-            prompt_tokens = self.model.encode(prompt_text).numpy().ravel().tolist()
+            generated = []
+            arg_prompt = prompt_tokens + self.model.encode(f"\n{arg}=").numpy().ravel().tolist()
 
             while True:
-                prompt_text = self._build_args_prompt(func_selected) + f"\n{arg}={number_text}"
-                prompt_tokens = self.model.encode(prompt_text).numpy().ravel().tolist()
 
                 logits = np.array(
                     self.model.get_logits_from_input_ids(
-                        prompt_tokens + generated
+                        arg_prompt + generated
                     )
                 )
 
@@ -213,17 +218,14 @@ class FunctionCallingEngine(BaseModel):
                     allowed_numbers,
                     key=lambda t: logits[t]
                 )
-                # print([(self.model.decode(t), logits[t]) for t in allowed_numbers])
+                print(self.model.decode(arg_prompt))
                 generated.append(best_token)
 
-                token_text = self.model.decode(best_token)
-                number_text += token_text
-
-
-                # stop condition
                 if best_token in stop_tokens:
-                    print(number_text)
                     break
+
+            number_text = self.model.decode(generated)
+            print(arg, number_text)
 
 
 
