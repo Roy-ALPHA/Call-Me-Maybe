@@ -1,25 +1,21 @@
 User Request:
-"Replace all numbers in \"Hello 34 I'm 233 years old\" with NUMBERS"
+what is the sum of 2222222 and 4
 
 Selected Function:
-fn_substitute_string_with_regex
+add_numbers
 
 Function description:
-Replace all occurrences matching a regex pattern in a string.
+getting the sum of 2 numbers
 
 Function Parameters:
-"source_string": {
-"type": "string"
+"a": {
+    "type": "number"
 },
-"regex": {
-"type": "string"
-},
-"replacement": {
-"type": "string"
+"b": {
+    "type": "number"
 }
 
+if Parameter type is "boolean" return (true or false). 
 
-I will give you the Parameter name and you give hes value (add "," in the end of value).
-source_string=\"Hello 34 I'm 233 years old\"
-regex=\\d+
-replacement=
+I will give you the Parameter name and you give hes value .
+a=
