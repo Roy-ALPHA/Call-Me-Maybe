@@ -9,6 +9,7 @@ from .validators import *
 from .Trie import TrieNode, Trie
 from multiprocessing import Pool, cpu_count
 from functools import cached_property
+from pathlib import Path
 
 
 class FunctionCallingEngine(BaseModel):
@@ -66,9 +67,8 @@ class FunctionCallingEngine(BaseModel):
             json.dumps(selected_function["parameters"]) +
             "\nFunction description:\n" +
             selected_function["description"] + "\n" +
-            'if Parameter type is "boolean" return (true or false).\n' + 
-            "I will give you the Parameter name and you give me hes value ."
-            "\n"
+            'if Parameter type is "boolean" return (true or false).' + 
+            "\nI will give you the Parameter name and you give me hes value.\n"
         )
 
         return prompt
@@ -99,83 +99,10 @@ class FunctionCallingEngine(BaseModel):
         for func in self.def_funcs:
             if func["name"] == func_selected[1:]:
                 func["prompt"] = cur_prompt
-                return self.extract_test(func)
-
-    # def _extract_int_arg(self, tokens: list, cur_arg) -> int:
-    #     """
-    #     Greedily decodes tokens until a complete integer is found.
-    #     Accumulates digit characters from each decoded token and stops
-    #     once a non-digit token is encountered after digits have been collected.
-    #     """
-    #     num = ""
-    #     generated = []
- 
-    #     while True:
-    #         logits = np.array(self.model.get_logits_from_input_ids(tokens + generated))
-    #         best_token = np.argmax(logits)
-
-    #         generated.append(best_token)
-
-    #         text = self.model.decode(best_token)
-    #         number = re.search(r"\d+", text)
-
-    #         if number:
-    #             num += number.group()
-    #         elif num:
-    #             break
- 
-    #     return int(num)
-
-    # def _extract_str_arg(self, tokens: list, cur_arg: str):
-    #     """
-    #     Greedily decodes tokens and accumulates text, attempting to parse
-    #     it as JSON after each token. Returns the value at `cur_arg` once
-    #     a valid JSON object containing that key is produced.
-    #     """
-    #     text = ""
-    #     decoder = json.JSONDecoder()
-    #     generated = []
- 
-    #     while True:
-    #         logits = np.array(self.model.get_logits_from_input_ids(tokens + generated))
-    #         best_token = np.argmax(logits)
-    #         generated.append(best_token)
-    #         text += self.model.decode(best_token)
-
-    #         try:
-    #             json_obj, _ = decoder.raw_decode(text)
-    #             if cur_arg in json_obj:
-    #                 return json_obj[cur_arg]
-    #         except json.JSONDecodeError:
-    #             pass
- 
-    # def _extract_bool_arg(self, tokens: list) -> bool:
-    #     """
-    #     Uses a Trie of valid boolean token sequences ("true" / "false") to
-    #     constrain generation. At each step, only tokens that are valid
-    #     continuations in the Trie are considered, picking the highest-logit
-    #     one. Guarantees the output is always exactly "true" or "false".
-    #     """
-    #     trie = Trie()
-    #     trie.insert(self.model.encode("true").numpy().ravel().tolist())
-    #     trie.insert(self.model.encode("false").numpy().ravel().tolist())
- 
-    #     generated = []
-    #     cur_node = trie.root
- 
-    #     while not cur_node.is_end:
-    #         logits = np.array(self.model.get_logits_from_input_ids(tokens + generated))
-    #         allowed_tokens = trie.get_allowed_next_tokens(cur_node)
-    #         best_token = max(allowed_tokens, key=lambda token: logits[token])
-    #         generated.append(best_token)
-    #         cur_node = trie.get_node(best_token, cur_node)
- 
-    #     return self.model.decode(generated).strip() == "true"
+                return self.extract_args(func)
 
 
-    def extract_test(self, func_selected):
-
-        # stop_tokens = self.model.encode(",").numpy().ravel().tolist() + self.model.encode("\n\n").numpy().ravel().tolist()
+    def extract_args(self, func_selected):
 
         allowed_numbers = set()
         for i in range(10):
@@ -184,6 +111,7 @@ class FunctionCallingEngine(BaseModel):
             )
         allowed_numbers.update(self.model.encode("-").numpy().ravel().tolist())
         allowed_numbers.update(self.model.encode(",").numpy().ravel().tolist())
+        allowed_numbers.update(self.model.encode(".").numpy().ravel().tolist())
 
         trie = Trie()
         trie.insert(self.model.encode("true").numpy().ravel().tolist())
@@ -196,7 +124,7 @@ class FunctionCallingEngine(BaseModel):
         final_res = {
             "prompt": func_selected["prompt"],
             "name": func_selected["name"],
-            "parameters": {}
+            "parameters": dict()
         }
 
 
@@ -215,7 +143,7 @@ class FunctionCallingEngine(BaseModel):
                 .tolist()
             )
 
-            while not True:
+            while True:
 
                 logits = np.array(
                     self.model.get_logits_from_input_ids(
@@ -234,7 +162,7 @@ class FunctionCallingEngine(BaseModel):
 
                     tmp_text = self.model.decode(best_token)
                     if "," in tmp_text:
-                        final_res["parameters"].update({arg: int(self.model.decode(generated).rstrip(","))})
+                        final_res["parameters"].update({arg: float(self.model.decode(generated).rstrip(","))})
                         break 
 
                 if arg_type == "boolean":
@@ -251,7 +179,7 @@ class FunctionCallingEngine(BaseModel):
                     cur_node = trie.get_node(best_token, cur_node)
 
                     if cur_node.is_end:
-                        final_res["parameters"].update({arg: self.model.decode(generated)})
+                        final_res["parameters"].update({arg: self.model.decode(generated).strip() == "true"})
                         break
                 
                 if arg_type == "string":
@@ -267,29 +195,19 @@ class FunctionCallingEngine(BaseModel):
             value = self.model.decode(generated)
 
             prompt_text += value
-        
-        print(final_res)
+
         return final_res
 
-    # def extract_args(self, func_selected):
-        
-    #     prompt_tokens = self.model.encode(self._build_args_prompt(func_selected)).numpy().ravel().tolist()
-    #     args = dict()
-
-    #     for arg in func_selected["parameters"]:
-    #         if func_selected["parameters"][arg]["type"] == "number":
-    #             args.update({arg: self._extract_int_arg(prompt_tokens, arg)})
-    #         elif func_selected["parameters"][arg]["type"] == "string":
-    #             args.update({arg: self._extract_str_arg(prompt_tokens, arg)})
-    #         elif func_selected["parameters"][arg]["type"] == "boolean":
-    #             args.update({arg: self._extract_bool_arg(prompt_tokens)})
-        
-    #     print(args)
-
-
-    
-    def test(self):
+    def call_me_maybe(self):
+        output = []
         start = time.perf_counter()
         for prompt in self.inpt_prompts:
-            self.extract_func(prompt["prompt"])
-        print((time.perf_counter() - start) / 60)
+            output.append(self.extract_func(prompt["prompt"]))
+
+        output_path = Path(self.args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with output_path.open("w") as f:
+            json.dump(output, f, indent=4)
+        
+        print("Time of execution:", round(((time.perf_counter() - start) / 60), 2), "min")

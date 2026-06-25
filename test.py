@@ -6,7 +6,7 @@ with open("prompt_test.txt") as f:
 model = Small_LLM_Model()
 
 generated = []
-while False:
+while True:
 
     tokens = model.encode(prompt).numpy().ravel().tolist()
 
@@ -20,5 +20,3 @@ while False:
 
     print(model.decode(best), best)
 
-
-print(model.decode(198) == "\n")

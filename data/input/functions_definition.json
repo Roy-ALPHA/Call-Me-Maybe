@@ -1,7 +1,7 @@
 [
   {
-    "name": "add_numbers",
-    "description": "getting the sum of 2 numbers",
+    "name": "fn_add_numbers",
+    "description": "Add two numbers together and return their sum.",
     "parameters": {
       "a": {
         "type": "number"

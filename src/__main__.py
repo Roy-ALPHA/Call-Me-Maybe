@@ -1,8 +1,8 @@
 from .core import *
 
 def run():
-    fn_caller = ArgParser().parse_validate_args()
-    fn_caller.test()
+    engine = ArgParser().parse_validate_args()
+    engine.call_me_maybe()
 
 if __name__ == "__main__":
     try:
