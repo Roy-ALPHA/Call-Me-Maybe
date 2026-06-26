@@ -6,26 +6,31 @@ Call-Me-Maybe is a small function-calling system that demonstrates how a causal 
 
 Instructions
 ------------
-- **Prerequisites**: Python 3.10+, git, network access to download Hugging Face models. Recommended creating a virtual environment.
+- **Prerequisites**: Python 3.10+, `git`, and network access to download Hugging Face models.
 
-Example setup (bash / zsh):
+Example setup with `uv` and `make`:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e .
+make install
 ```
 
 - **Run the program** (example):
 
 ```bash
-python -m src --functions_definition data/input/functions_definition.json \
-		--input data/input/function_calling_tests.json \
-		--output data/output/function_calls.json
+make run ARGS="--functions_definition data/input/functions_definition.json --input data/input/function_calling_tests.json --output data/output/function_calls.json"
 ```
 
-By default the example inputs are in `data/input/` and functions are defined in `data/input/functions_definition.json`.
+By default, the example inputs are in `data/input/` and functions are defined in `data/input/functions_definition.json`.
+
+Useful `make` targets:
+
+```bash
+make install
+make run ARGS="--functions_definition data/input/functions_definition.json --input data/input/function_calling_tests.json --output data/output/function_calls.json"
+make debug ARGS="--functions_definition data/input/functions_definition.json --input data/input/function_calling_tests.json --output data/output/function_calls.json"
+make lint
+make clean
+```
 
 Algorithm explanation
 ---------------------
