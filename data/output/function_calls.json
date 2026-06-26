@@ -1,18 +1,20 @@
 [
     {
-        "prompt": "What is the sum of -2 and -3?",
-        "name": "fn_add_numbers",
+        "prompt": "What is the div of -2 and -3?",
+        "name": "fn_substitute_string_with_regex",
         "parameters": {
-            "a": -2.0,
-            "b": -3.0
+            "source_string": "This is a test string",
+            "regex": "test",
+            "replacement": "test2"
         }
     },
     {
-        "prompt": "What is the sum of 265 and -345?",
-        "name": "fn_add_numbers",
+        "prompt": "What is the multiplication of 265 and -345?",
+        "name": "fn_substitute_string_with_regex",
         "parameters": {
-            "a": 265.0,
-            "b": -345.0
+            "source_string": "265",
+            "regex": "265",
+            "replacement": "345"
         }
     },
     {

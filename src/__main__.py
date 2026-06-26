@@ -1,6 +1,9 @@
-from .core import *
+from .core import ArgParser
+from argparse import ArgumentTypeError
 
-def run():
+
+def run() -> None:
+    """Run the command-line interface for the function-calling engine."""
     try:
         engine = ArgParser().parse_validate_args()
         engine.call_me_maybe()
@@ -13,6 +16,7 @@ def run():
     except Exception as e:
         print(f"Unexpected error: {e}")
         exit(1)
+
 
 if __name__ == "__main__":
     run()

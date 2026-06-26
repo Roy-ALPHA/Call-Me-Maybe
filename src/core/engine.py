@@ -3,16 +3,20 @@ from argparse import Namespace
 from llm_sdk import Small_LLM_Model
 import numpy as np
 import json
-import re
 import time
-from .validators import *
-from .Trie import TrieNode, Trie
-from multiprocessing import Pool, cpu_count
+from .Trie import Trie, TrieNode
 from functools import cached_property
 from pathlib import Path
 
 
 class FunctionCallingEngine(BaseModel):
+    """Run constrained function selection and argument extraction.
+
+    The engine loads the available function definitions and user prompts,
+    selects the best matching function with constrained decoding, and then
+    extracts typed arguments for the selected function.
+    """
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     args: Namespace
@@ -22,14 +26,19 @@ class FunctionCallingEngine(BaseModel):
     func_prompt: str = ""
     args_prompt: str = ""
 
-    @staticmethod
-    def mask_low_scores(allowed_tokens, logits):
-        return {token: logits[token] for token in allowed_tokens}
-
     @cached_property
-    def _build_trie(self):
+    def _build_trie(self) -> Trie:
+        """Build a trie containing tokenized function names.
+
+        Returns:
+            A ``Trie`` that constrains generation to valid function names.
+
+        Raises:
+            RuntimeError: If the prompt file cannot be loaded or the trie
+                cannot be constructed.
+        """
         try:
-            trie = Trie()
+            trie: Trie = Trie()
 
             for func in self.def_funcs:
                 trie.insert(
@@ -39,9 +48,8 @@ class FunctionCallingEngine(BaseModel):
                     .tolist()
                 )
 
-            with open("prompts/func_prompt.txt") as f1, open("prompts/args_prompt.txt") as f2:
+            with open("prompts/func_prompt.txt") as f1:
                 self.func_prompt = f1.read()
-                self.args_prompt = f2.read()
 
             return trie
         except FileNotFoundError as e:
@@ -49,9 +57,17 @@ class FunctionCallingEngine(BaseModel):
         except Exception as e:
             raise RuntimeError(f"Failed to build Trie: {e}")
 
-    def _build_func_prompt(self, cur_prompt):
+    def _build_func_prompt(self, cur_prompt: str) -> str:
+        """Build the prompt used to select the best matching function.
 
-        prompt = (
+        Args:
+            cur_prompt: The current user request.
+
+        Returns:
+            The full prompt string passed to the model.
+        """
+
+        prompt: str = (
             self.func_prompt +
             "\nUser Request:\n" + cur_prompt +
             "\nAvailable Functions:\n" +
@@ -62,74 +78,123 @@ class FunctionCallingEngine(BaseModel):
 
         return prompt
 
-    def _build_args_prompt(self, selected_function):
+    def _build_args_prompt(self, selected_function: dict) -> str:
+        """Build the prompt used to extract arguments for a function.
 
-        prompt = (
+        Args:
+            selected_function: The selected function definition augmented with
+                the original user prompt.
+
+        Returns:
+            The full prompt string used for argument extraction.
+        """
+
+        prompt: str = (
             "\nUser Request:\n" + selected_function["prompt"] +
             "\nSelected Function:\n" +
-            selected_function["name"] + 
+            selected_function["name"] +
             "\nFunction Parameters (in order):\n" +
             json.dumps(selected_function["parameters"]) +
             "\nFunction description:\n" +
             selected_function["description"] + "\n" +
-            'if Parameter type is "boolean" return (true or false).' + 
+            'if Parameter type is "boolean" return (true or false).' +
             "\nI will give you the Parameter name and you give me hes value.\n"
         )
 
         return prompt
 
-    def extract_func(self, cur_prompt):
+    def extract_func(self, cur_prompt: str) -> dict:
+        """Select the best matching function and extract its arguments.
+
+        Args:
+            cur_prompt: The natural-language request from the user.
+
+        Returns:
+            A dictionary containing the selected function name, prompt, and
+            parsed parameters.
+
+        Raises:
+            RuntimeError: If function extraction fails.
+        """
         try:
-            trie, prompt = (self._build_trie, self._build_func_prompt(cur_prompt))
+            trie: Trie = self._build_trie
+            prompt: str = self._build_func_prompt(cur_prompt)
 
-            func = []
+            func_tokens: list[int] = []
 
-            cur_node = trie.root
-            prompt_tokens = self.model.encode(prompt).numpy().ravel().tolist()
+            cur_node: TrieNode = trie.root
+            prompt_tokens: list[int] = (
+                self.model.encode(prompt).numpy().ravel().tolist()
+            )
 
             while not cur_node.is_end:
 
-                logits = np.array(self.model.get_logits_from_input_ids(prompt_tokens + func))
+                logits: list[float] = self.model.get_logits_from_input_ids(
+                    prompt_tokens + func_tokens
+                )
 
-                allowed_tokens = trie.get_allowed_next_tokens(cur_node)
+                allowed_tokens: list[int] = trie.get_allowed_next_tokens(
+                    cur_node
+                )
 
-                best_token = max(allowed_tokens, key=lambda token: logits[token])
+                best_token: int = max(
+                    allowed_tokens, key=lambda token: logits[token]
+                )
 
-                func.append(best_token)
+                func_tokens.append(best_token)
 
                 cur_node = trie.get_node(best_token, cur_node)
 
-            func_selected = self.model.decode(func)
+            func_selected: str = self.model.decode(func_tokens)
 
-            for func in self.def_funcs:
-                if func["name"] == func_selected[1:]:
-                    func["prompt"] = cur_prompt
-                    return self.extract_args(func)
+            for func_def in self.def_funcs:
+                if func_def["name"] == func_selected[1:]:
+                    func_def["prompt"] = cur_prompt
+                    return self.extract_args(func_def)
+
+            raise RuntimeError("No matching function found")
         except Exception as e:
             raise RuntimeError(f"Error extracting function: {e}")
 
+    def extract_args(self, func_selected: dict) -> dict:
+        """Extract typed arguments for the selected function.
 
-    def extract_args(self, func_selected):
+        Args:
+            func_selected: The selected function definition plus the original
+                prompt.
 
-        allowed_numbers = set()
+        Returns:
+            A dictionary containing the prompt, function name, and parsed
+            parameter values.
+        """
+
+        allowed_numbers: set[int] = set()
         for i in range(10):
             allowed_numbers.update(
                 self.model.encode(str(i)).numpy().ravel().tolist()
             )
-        allowed_numbers.update(self.model.encode(" -").numpy().ravel().tolist())
-        allowed_numbers.update(self.model.encode(",").numpy().ravel().tolist())
-        allowed_numbers.update(self.model.encode(".").numpy().ravel().tolist())
-        allowed_numbers.update(self.model.encode("\n").numpy().ravel().tolist())
+        allowed_numbers.update(
+            self.model.encode(" -").numpy().ravel().tolist()
+        )
+        allowed_numbers.update(
+            self.model.encode(",").numpy().ravel().tolist()
+        )
+        allowed_numbers.update(
+            self.model.encode(".").numpy().ravel().tolist()
+        )
+        allowed_numbers.update(
+            self.model.encode("\n").numpy().ravel().tolist()
+        )
 
-        trie = Trie()
+        trie: Trie = Trie()
         trie.insert(self.model.encode("true").numpy().ravel().tolist())
         trie.insert(self.model.encode("false").numpy().ravel().tolist())
 
-        prompt_text = (
+        prompt_text: str = (
             self._build_args_prompt(func_selected)
         )
 
-        final_res = {
+        final_res: dict = {
             "prompt": func_selected["prompt"],
             "name": func_selected["name"],
             "parameters": dict()
@@ -137,13 +202,12 @@ class FunctionCallingEngine(BaseModel):
 
         for arg in func_selected["parameters"]:
 
-            generated = []
-            arg_type = func_selected["parameters"][arg]["type"]
+            generated: list[int] = []
+            arg_type: str = func_selected["parameters"][arg]["type"]
             prompt_text += f"\n{arg}="
-            cur_node = trie.root
+            cur_node: TrieNode = trie.root
 
-
-            prompt_tokens = (
+            prompt_tokens: list[int] = (
                 self.model.encode(prompt_text)
                 .numpy()
                 .ravel()
@@ -152,51 +216,68 @@ class FunctionCallingEngine(BaseModel):
 
             while True:
 
-                logits = np.array(
-                    self.model.get_logits_from_input_ids(
-                        prompt_tokens + generated
-                    )
+                logits: list[float] = self.model.get_logits_from_input_ids(
+                    prompt_tokens + generated
                 )
 
-                if arg_type == "number":
+                if arg_type in ["number", "integer"]:
 
-                    best_token = max(
+                    best_token: int = max(
                         allowed_numbers,
                         key=lambda t: logits[t]
                     )
 
                     generated.append(best_token)
 
-                    tmp_text = self.model.decode(best_token)
+                    tmp_text: str = self.model.decode([best_token])
                     if "," in tmp_text or "\n" in tmp_text:
-                        final_res["parameters"].update({arg: float(self.model.decode(generated).rstrip(","))})
-                        break 
+                        if arg_type == "number":
+                            decoded_value = self.model.decode(generated)
+                            decoded_value = decoded_value.rstrip(",")
+                            final_res["parameters"].update(
+                                {arg: float(decoded_value)}
+                            )
+                        else:
+                            value = self.model.decode(generated)
+                            value = value.rstrip(",").split(".")[0]
+                            final_res["parameters"].update(
+                                {arg: int(value)}
+                            )
+                        break
 
                 if arg_type == "boolean":
 
-                    allowed_tokens = trie.get_allowed_next_tokens(cur_node)
+                    allowed_tokens = trie.get_allowed_next_tokens(
+                        cur_node
+                    )
 
-                    best_token = max(
+                    bool_token: int = max(
                         allowed_tokens,
                         key=lambda t: logits[t]
                     )
 
-                    generated.append(best_token)
+                    generated.append(bool_token)
 
-                    cur_node = trie.get_node(best_token, cur_node)
+                    cur_node = trie.get_node(bool_token, cur_node)
 
                     if cur_node.is_end:
-                        final_res["parameters"].update({arg: self.model.decode(generated).strip() == "true"})
+                        value = self.model.decode(generated).strip()
+                        final_res["parameters"].update(
+                            {arg: value == "true"}
+                        )
                         break
-                
+
                 if arg_type == "string":
 
-                    best_token = np.argmax(logits)
+                    text_token = int(np.argmax(logits))
 
-                    generated.append(best_token)
+                    generated.append(text_token)
 
-                    if "\n" in self.model.decode(best_token):
-                        final_res["parameters"].update({arg: self.model.decode(generated).strip().strip('"')})
+                    if "\n" in self.model.decode([text_token]):
+                        value = self.model.decode(generated).strip()
+                        final_res["parameters"].update(
+                            {arg: value.strip('"')}
+                        )
                         break
 
             value = self.model.decode(generated)
@@ -205,9 +286,15 @@ class FunctionCallingEngine(BaseModel):
 
         return final_res
 
-    def call_me_maybe(self):
+    def call_me_maybe(self) -> None:
+        """Process all prompts and write the extracted calls to disk.
+
+        Raises:
+            RuntimeError: If writing the output file or processing prompts
+                fails.
+        """
         try:
-            output = []
+            output: list[dict] = []
             start = time.perf_counter()
             for prompt in self.inpt_prompts:
                 try:
@@ -221,8 +308,12 @@ class FunctionCallingEngine(BaseModel):
 
             with output_path.open("w") as f:
                 json.dump(output, f, indent=4)
-            
-            print("Time of execution:", round(((time.perf_counter() - start) / 60), 2), "min")
+
+            print(
+                "Time of execution:",
+                round(((time.perf_counter() - start) / 60), 2),
+                "min"
+            )
         except IOError as e:
             raise RuntimeError(f"Failed to write output: {e}")
         except Exception as e:

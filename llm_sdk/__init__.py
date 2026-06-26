@@ -1,8 +1,8 @@
 # ABOUTME: LLM SDK for local model inference using Hugging Face transformers.
 # ABOUTME: Provides Small_LLM_Model class for loading and running causal language models.
+# flake8: noqa
 
-import time
-from typing import Tuple
+from typing import Any, cast
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizer, PreTrainedModel, logging
@@ -36,6 +36,15 @@ class Small_LLM_Model:
         dtype: torch.dtype | None = None,
         trust_remote_code: bool = True,
     ) -> None:
+        """Load the tokenizer and causal language model.
+
+        Args:
+            model_name: Hugging Face repository id of the model to load.
+            device: Target device. If omitted, the best available device is
+                selected automatically.
+            dtype: Numerical precision to use for model weights.
+            trust_remote_code: Whether to allow remote model code execution.
+        """
         self._model_name = model_name
 
         # Auto-select device with priority: mps > cuda > cpu
@@ -100,6 +109,7 @@ class Small_LLM_Model:
 
 
     def get_path_to_vocab_file(self) -> str:
+        """Download and return the tokenizer vocabulary file path."""
         vocab_file_name = self._tokenizer.vocab_files_names.get('vocab_file', "vocab.json")
         vocab_path = hf_hub_download(
             repo_id=self._model_name,
@@ -109,6 +119,7 @@ class Small_LLM_Model:
 
 
     def get_path_to_merges_file(self) -> str:
+        """Download and return the tokenizer merges file path."""
         merges_file_name = self._tokenizer.vocab_files_names.get('merges_file', "merges.txt")
         merges_path = hf_hub_download(
             repo_id=self._model_name,
@@ -118,6 +129,7 @@ class Small_LLM_Model:
 
 
     def get_path_to_tokenizer_file(self) -> str:
+        """Download and return the tokenizer JSON file path."""
         tokenizer_file_name = self._tokenizer.vocab_files_names.get('tokenizer_file', "tokenizer.json")
         tokenizer_path = hf_hub_download(
             repo_id=self._model_name,
