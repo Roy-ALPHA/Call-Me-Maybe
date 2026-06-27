@@ -189,6 +189,8 @@ class FunctionCallingEngine(BaseModel):
         trie: Trie = Trie()
         trie.insert(self.model.encode("true").numpy().ravel().tolist())
         trie.insert(self.model.encode("false").numpy().ravel().tolist())
+        trie.insert(self.model.encode(" true").numpy().ravel().tolist())
+        trie.insert(self.model.encode(" false").numpy().ravel().tolist())
 
         prompt_text: str = (
             self._build_args_prompt(func_selected)
