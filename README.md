@@ -119,3 +119,78 @@ Notes and next steps
 Credits
 -------
 Project scaffold and code authored as part of the 42 curriculum.
+```
+flowchart TD
+
+subgraph group_io["CLI / I/O"]
+  node_main(("__main__<br/>entrypoint<br/>[__main__.py]"))
+  node_cli["CLI<br/>parser<br/>[cli.py]"]
+  node_writer["Result write<br/>output"]
+end
+
+subgraph group_core["Core engine"]
+  node_validators["Validators<br/>schema gate<br/>[validators.py]"]
+  node_engine["Engine<br/>orchestrator<br/>[engine.py]"]
+  node_trie{{"Trie<br/>constraint index<br/>[Trie.py]"}}
+  node_func_select(("Func select<br/>phase"))
+  node_arg_extract(("Arg extract<br/>phase"))
+  node_constrained_decode{{"Constrained decode<br/>decoder"}}
+  node_prompt_build["Prompt build<br/>template step"]
+end
+
+subgraph group_runtime["Local model"]
+  node_llm_sdk["LLM SDK<br/>model boundary<br/>[__init__.py]"]
+  node_tokenizer(("Tokenizer<br/>token-id alignment"))
+  node_logits(("Logits<br/>scoring"))
+end
+
+subgraph group_assets["Assets"]
+  node_func_prompt["Function prompt<br/>template<br/>[func_prompt.txt]"]
+  node_function_defs["Function catalog<br/>input json"]
+  node_test_prompts["Test prompts<br/>input json"]
+end
+
+node_main -->|"start"| node_cli
+node_cli -->|"validate"| node_validators
+node_cli -->|"run"| node_engine
+node_function_defs -->|"schema"| node_validators
+node_test_prompts -->|"schema"| node_validators
+node_validators -->|"clean inputs"| node_engine
+node_engine -->|"assemble"| node_prompt_build
+node_func_prompt -->|"template"| node_prompt_build
+node_function_defs -->|"tokenize"| node_trie
+node_trie -->|"allow tokens"| node_func_select
+node_prompt_build -->|"selection prompt"| node_func_select
+node_func_select -->|"decode"| node_constrained_decode
+node_constrained_decode -->|"scores"| node_llm_sdk
+node_llm_sdk -->|"token ids"| node_tokenizer
+node_tokenizer -->|"align"| node_trie
+node_func_select -->|"selected function"| node_arg_extract
+node_prompt_build -->|"arg prompt"| node_arg_extract
+node_arg_extract -->|"type constraints"| node_constrained_decode
+node_constrained_decode -->|"score"| node_logits
+node_engine -->|"emit"| node_writer
+node_writer -.->|"done"| node_main
+
+click node_main "https://github.com/roy-alpha/call-me-maybe/blob/main/src/__main__.py"
+click node_cli "https://github.com/roy-alpha/call-me-maybe/blob/main/src/core/cli.py"
+click node_validators "https://github.com/roy-alpha/call-me-maybe/blob/main/src/core/validators.py"
+click node_engine "https://github.com/roy-alpha/call-me-maybe/blob/main/src/core/engine.py"
+click node_trie "https://github.com/roy-alpha/call-me-maybe/blob/main/src/core/Trie.py"
+click node_llm_sdk "https://github.com/roy-alpha/call-me-maybe/blob/main/llm_sdk/__init__.py"
+click node_func_prompt "https://github.com/roy-alpha/call-me-maybe/blob/main/prompts/func_prompt.txt"
+click node_function_defs "https://github.com/roy-alpha/call-me-maybe/blob/main/data/input/functions_definition.json"
+click node_test_prompts "https://github.com/roy-alpha/call-me-maybe/blob/main/data/input/function_calling_tests.json"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_main,node_cli,node_writer toneBlue
+class node_validators,node_engine,node_trie,node_func_select,node_arg_extract,node_constrained_decode,node_prompt_build toneAmber
+class node_llm_sdk,node_tokenizer,node_logits toneMint
+class node_func_prompt,node_function_defs,node_test_prompts toneRose
+```
